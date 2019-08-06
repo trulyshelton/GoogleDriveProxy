@@ -1,0 +1,508 @@
+import React, {useEffect} from 'react';
+import ReactDOM from 'react-dom';
+// import { render } from 'react-snapshot';
+import './index.css';
+import CssBaseline from "@material-ui/core/CssBaseline";
+import AppBar from "@material-ui/core/AppBar";
+import Toolbar from "@material-ui/core/Toolbar";
+import {Menu as MenuIcon, Search, ArrowBack, NavigateNext, CloudDownload, FavoriteBorder, Favorite} from '@material-ui/icons';
+import Menu from '@material-ui/core/Menu';
+import Typography from "@material-ui/core/Typography";
+import {makeStyles} from "@material-ui/core";
+import {lightBlue} from "@material-ui/core/colors";
+import {fade} from "@material-ui/core/styles";
+import InputBase from "@material-ui/core/InputBase";
+import Button from "@material-ui/core/Button";
+import Dialog from "@material-ui/core/Dialog";
+import Grid from "@material-ui/core/Grid";
+import Container from "@material-ui/core/Container";
+import Card from "@material-ui/core/Card";
+import CardMedia from "@material-ui/core/CardMedia";
+import CardContent from "@material-ui/core/CardContent";
+import CardActions from "@material-ui/core/CardActions";
+import LinearProgress from "@material-ui/core/LinearProgress";
+import IconButton from "@material-ui/core/IconButton";
+import MenuItem from "@material-ui/core/MenuItem";
+import FormControl from "@material-ui/core/FormControl";
+import InputLabel from "@material-ui/core/InputLabel";
+import Select from "@material-ui/core/Select";
+import Tooltip from "@material-ui/core/Tooltip";
+import DialogTitle from "@material-ui/core/DialogTitle";
+import DialogContentText from "@material-ui/core/DialogContentText";
+import DialogContent from "@material-ui/core/DialogContent";
+import TextField from "@material-ui/core/TextField";
+import DialogActions from "@material-ui/core/DialogActions";
+
+const api = "https://api.sheltonhuang.me/GoogleDriveProxy/";
+
+const isMac = navigator.platform.toUpperCase().indexOf('MAC')>=0;
+const folderMimeType = 'application/vnd.google-apps.folder';
+const folderImg = 'folderImg.jpg';
+const failOverImg = 'imgNotFound.jpg';
+
+const useStyles = makeStyles(theme => ({
+    appBar: {
+        backgroundColor: lightBlue["700"],
+    },
+    icon: {
+        marginRight: theme.spacing(2),
+    },
+    grow: {
+        flexGrow: 1,
+    },
+    conditionGrow: {
+        [theme.breakpoints.up('sm')]: {
+            flexGrow: 1,
+        }
+    },
+    search: {
+        position: 'relative',
+        borderRadius: theme.shape.borderRadius,
+        backgroundColor: fade(theme.palette.common.white, 0.15),
+        '&:hover': {
+            backgroundColor: fade(theme.palette.common.white, 0.25),
+        },
+        marginRight: 0,
+        marginLeft: 0,
+        width: '100%',
+        [theme.breakpoints.up('sm')]: {
+            width: 600,
+        },
+    },
+    searchIcon: {
+        width: theme.spacing(7),
+        height: '100%',
+        position: 'absolute',
+        pointerEvents: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    inputRoot: {
+        color: 'inherit',
+        width: 'calc(100% - 50px)'
+    },
+    inputInput: {
+        padding: theme.spacing(1, 1, 1, 7),
+        transition: theme.transitions.create('width'),
+        width: '100%'
+    },
+    cardGrid: {
+        paddingTop: theme.spacing(8),
+        paddingBottom: theme.spacing(8),
+    },
+    card: {
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    cardMedia: {
+        paddingTop: '56.25%', // 16:9
+    },
+    cardContent: {
+        flexGrow: 1,
+    },
+    form: {
+        display: 'flex',
+        flexWrap: 'wrap'
+    },
+    formControl: {
+        margin: theme.spacing(1),
+        minWidth: 120,
+    }
+}));
+
+
+
+const viewed = (id) => {
+    let recentViews = JSON.parse(localStorage.getItem("recentViews") || "[]");
+    let position = recentViews.indexOf(id);
+    if (position > -1) recentViews.splice(position, 1);
+    recentViews.unshift(id);
+    recentViews.splice(100);
+    localStorage.setItem("recentViews", JSON.stringify(recentViews));
+};
+
+function getReadableFileSizeString(fileSizeInBytes) {
+    let i = -1, byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
+    do { fileSizeInBytes = fileSizeInBytes / 1024; i++; } while (fileSizeInBytes > 1024);
+    return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i];
+}
+
+const getToken = ()=> localStorage.getItem("token");
+let cacheItems = [];
+
+function App() {
+    const classes = useStyles();
+    const inputRef = React.createRef();
+
+    const [loginState, setLoginState]  = React.useState({loggedIn: !!getToken(), open: false, submitting: false});
+    const [searchDisabled, setSearchDisabled] = React.useState(!getToken());
+    const [items, setItems] = React.useState([]);
+    const [folders, setFolders] = React.useState([]);
+    const [history, setHistory] = React.useState([]);
+    const [favorites, setFavorites] = React.useState([]);
+    const [orderby, setOrderby] = React.useState({key: 'modifiedTime', reverse:true, disabled: false});
+    const [view, setView] = React.useState({open: false});
+
+
+    const cmpfnfn = (a,b) => {
+        if (orderby.disabled) return 0;
+        if (orderby.reverse)  { let c = a; a = b; b = c; }
+        let k = orderby.key;
+        if (k === 'name' || k === 'modifiedTime') { return a[k].localeCompare(b[k]) }
+        else { return (a[k] && b[k]) ? parseInt(a[k]) - parseInt(b[k]) : a['modifiedTime'].localeCompare(b['modifiedTime']) }
+    };
+
+    const loadResource = (opts) => {
+        setSearchDisabled(true);
+        if (opts.rewind) {
+            opts.value = history[history.length-2];
+            setHistory(history.slice(0, history.length-1));
+        }
+        return fetch(`${api}${opts.value}`,  {headers: {Authorization: getToken()}, ...(opts.opts ? opts.opts : {})})
+            .then(resp => resp.json())
+            .then((res) => {
+                setOrderby({...orderby, disabled: opts.sort === false});
+                setItems(cacheItems = res.files.filter(el => el.mimeType !== folderMimeType));
+                setFolders(res.files.filter(el => el.mimeType === folderMimeType));
+                !opts.rewind && !opts.opts && (!history.length || history[history.length-1] !== opts.value) && setHistory([...history, opts.value]);
+                return res;
+            })
+            .then((res) => opts.postProcess ? opts.postProcess(res) : null)
+            .catch(alert)
+            .finally(() => setSearchDisabled(false));
+    };
+
+    const searchTrigger = (ev) => {
+        ev && ev.preventDefault && ev.preventDefault();
+        loadResource({value: inputRef.current.value ? `query/${inputRef.current.value}` : 'folder/root'});
+    };
+
+
+
+
+    const accessModal = (state) => {
+        if (state.name) {
+            setView(state);
+        } else {
+            let item = cacheItems.find(x => x.id === state.id);
+            if (item) {
+                setView({...state, name: item.name});
+                viewed(state.id);
+            } else {
+                fetch(`${api}file`, {
+                        body: JSON.stringify({files: [state.id]}),
+                        method: 'POST',
+                        headers: {'Authorization': getToken(), 'Content-Type': 'application/json'}
+                    })
+                    .then(resp => resp.json())
+                    .then(res => {
+                        if (res.files.length === 1) {
+                            setView({...state, name: res.files[0].name});
+                            viewed(state.id);
+                        }
+                    })
+                    .catch(console.log);
+            }
+        }
+    };
+
+    const loginTrigger = (ev) => {
+        if (ev.key === 'Enter' && loginState.username && loginState.password) login();
+    };
+
+    const login = () => {
+        setLoginState({...loginState, submitting: true});
+        fetch(`${api}auth`, {
+            body: JSON.stringify({username: loginState.username, password: loginState.password}),
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+            .then(resp => {
+                if (resp.status === 401) {
+                    alert("Incorrect username or password.");
+                    throw resp;
+                } else if (resp.status === 200) {
+                    return resp.json();
+                } else {
+                    alert("Unknown response " + resp.status + " from server.");
+                    throw resp;
+                }
+            })
+            .then(resp => {
+                localStorage.setItem('token', resp.token);
+                afterLogin();
+                setLoginState({loggedIn: true, open: false, submitting: false});
+            })
+            .catch(err => {
+                console.log(err);
+                setLoginState({...loginState, submitting: false});
+            })
+    };
+
+    const logout = () => {
+        inputRef.current.value = "";
+        setLoginState({loggedIn: false, open: false, submitting: false});
+        setItems([]); setFolders([]); setFavorites([]); setHistory([]); setSearchDisabled(true);
+        localStorage.removeItem('token');
+        handleMenuClose();
+    };
+
+    const afterLogin = () => {
+        loadResource({value: 'folder/root'});
+        fetch(`${api}favorite`, {headers: {Authorization: getToken()}})
+            .then(resp => resp.json())
+            .then((res) => setFavorites(res.files))
+            .catch(alert);
+    };
+
+    useEffect(() => {
+        const eventResponder = () =>  accessModal({open: true, id: window.location.hash.substr(1)});
+        window.addEventListener("hashchange", eventResponder, false);
+        window.addEventListener("myhashchange", eventResponder, false);
+        if (window.location.hash.substr(1)) accessModal({open: true, id: window.location.hash.substr(1)});
+       if (getToken()) afterLogin();
+    // eslint-disable-next-line
+    }, []);
+
+
+    //modal
+
+    const fetchFavorite = (id) => {
+        let isAdd = !favorites.includes(id);
+        fetch(`${api}favorite/${id}`, {headers: {Authorization: getToken()}, method: isAdd ? 'PUT' : 'DELETE'})
+            .then(async resp => {
+                if (resp.status === 204)  {
+                    if (isAdd) {
+                        if (!favorites.includes(id)) {
+                            setFavorites([id, ...favorites])
+                        }
+                    } else {
+                        setFavorites(favorites.filter(x => x !== id));
+                    }
+                } else if (resp.status === 507) {
+                    throw (await resp.json()).errorMessage;
+                } else {
+                    throw resp.json();
+                }
+            })
+            .catch(alert)
+            .finally(handleMenuClose);
+    };
+
+    const fetchRecent = () => {
+        let recentViews = JSON.parse(localStorage.getItem("recentViews") || "[]");
+        if (recentViews.length) {
+            loadResource({
+                sort: false,
+                value: "file",
+                opts: {
+                    body: JSON.stringify({files: recentViews}),
+                    method: 'POST',
+                }}).then(handleMenuClose)
+        }
+    };
+
+    const changeReverse = (e) => {
+        if (e.target.innerText && e.target.innerText.includes('Order By')) {
+            setOrderby({...orderby, reverse: !orderby.reverse})
+        }
+    };
+
+    const handleModalClick = (e) => {
+        let el = e.target, id, name, mimetype;
+        do {
+            el = el.parentNode;
+            id = el.attributes.getNamedItem('data-id') ? el.attributes.getNamedItem('data-id').value : null;
+            name = el.attributes.getNamedItem('data-name') ? el.attributes.getNamedItem('data-name').value : null;
+            mimetype = el.attributes.getNamedItem('data-mimetype') ? el.attributes.getNamedItem('data-mimetype').value : null;
+        } while (el.parentNode && !(id && name && mimetype));
+
+        if (e.target.tagName === 'svg' || e.target.tagName === 'path') {  // is favorite click
+            fetchFavorite(id);
+        } else {
+            if (mimetype === folderMimeType) {
+                loadResource({value: `folder/${id}`});
+            } else {
+                window.history.replaceState({}, '', '#' + id);
+                window.dispatchEvent(new Event("myhashchange"));
+            }
+        }
+    };
+
+    const handleModalClose = () => {
+        setView({open: false});
+        window.history.replaceState({}, '', window.location.pathname);
+    };
+
+
+    //menu
+    const [anchorEl, setAnchorEl] = React.useState(null);
+
+    const handleMenuClick = (event) => setAnchorEl(event.currentTarget);
+
+    const handleMenuClose = () => setAnchorEl(null);
+
+
+    function tooltipCardMedia(card) {
+        let time = card.modifiedTime;
+        let size = card.size;
+        if (time && size) {
+            return  (
+                <Tooltip title={<div>{getReadableFileSizeString(parseInt(size))}<br />{time.substr(0,10)}</div>}>
+                    <CardMedia className={classes.cardMedia} onClick={handleModalClick} style={{height: 0}}
+                    image={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />
+                </Tooltip>);
+        } else {
+            return (
+                <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick}
+                    image={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />);
+        }
+    }
+
+
+    return (
+        <>
+            <CssBaseline />
+                <AppBar position="sticky" className={classes.appBar}>
+                    <Toolbar>
+                        {loginState.loggedIn ?
+                            (<IconButton color="inherit" aria-controls="simple-menu" aria-haspopup="true" onClick={handleMenuClick}><MenuIcon/></IconButton>) :
+                            ( <Button  variant="contained"  onClick={() => setLoginState({...loginState, open: true})} >Login</Button>)
+                        }
+                        <Menu
+                            id="simple-menu" keepMounted
+                            anchorEl={anchorEl}
+                            open={Boolean(anchorEl)}
+                            onClose={handleMenuClose}
+                        >
+                            <MenuItem onClick={() => loadResource({value: "folder/root"})} >Home</MenuItem>
+                            <MenuItem onClick={() => loadResource({
+                                value: "favorite?alt=content",
+                                postProcess: (r) => setFavorites(r.files.map(x => x.id)) })} >Favorites</MenuItem>
+                            <MenuItem onClick={changeReverse}>
+                                <form className={classes.form} autoComplete="off">
+                                    <FormControl className={classes.formControl}>
+                                        <InputLabel htmlFor="orderby">Order By{orderby.reverse ? ' ⬇️':' ⬆️'}</InputLabel>
+                                        <Select
+                                            value={orderby.key}
+                                            onChange={(event) => setOrderby({...orderby, key: event.target.value})}
+                                            inputProps={{ name: 'Order By', id: 'orderby', }}
+                                        >
+                                            <MenuItem value={'modifiedTime'}>Last Modified</MenuItem>
+                                            <MenuItem value={'name'}>Name</MenuItem>
+                                            <MenuItem value={'size'}>Size</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </form>
+                            </MenuItem>
+                            <MenuItem onClick={fetchRecent} >Recently Viewed</MenuItem>
+                            <MenuItem onClick={logout} >Logout</MenuItem>
+                        </Menu>
+
+                        <div className={classes.grow} />
+                        <div className={classes.search}>
+                            <div className={classes.searchIcon}>
+                                <Search />
+                            </div>
+                            <form action="." onSubmit={searchTrigger}>
+                                <InputBase
+                                    placeholder="Search…"
+                                    classes={{
+                                        root: classes.inputRoot,
+                                        input: classes.inputInput,
+                                    }}
+                                    inputProps={{ 'aria-label': 'Search keywords' }}
+                                    inputRef={inputRef}
+                                    disabled={searchDisabled}
+                                    type='search'
+                                />
+                                <IconButton disabled={searchDisabled} onClick={searchTrigger} color='inherit'><NavigateNext/></IconButton>
+                            </form>
+                        </div>
+                        <div className={classes.grow} />
+                        <IconButton color="inherit" disabled={history.length <= 1} onClick={() => loadResource({rewind: true})}><ArrowBack/></IconButton>
+                    </Toolbar>
+                    {searchDisabled && loginState.loggedIn && <LinearProgress variant="query" />}
+                </AppBar>
+            <main>
+                <Container className={classes.cardGrid} maxWidth="lg" >
+                    <Grid container spacing={4}>
+                        {folders.sort(cmpfnfn).concat(items.sort(cmpfnfn)).map(card => (
+                            <Grid item key={card['id']} xs={12} sm={6} md={3}  >
+                                <Card className={classes.card} data-id={card.id} data-name={card.name} data-mimetype={card.mimeType} style={{position: 'relative'}}>
+                                    {tooltipCardMedia(card)}
+                                    {card.mimeType !== folderMimeType &&
+                                    <IconButton size="small" color="primary" onClick={handleModalClick} style={{ position: 'absolute', top: '17px', right: '20px' }}>
+                                        {favorites.includes(card.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
+                                    </IconButton>}
+                                    <CardContent className={classes.cardContent}>
+                                        <Typography variant="subtitle1" component="h2">
+                                            {card.name}
+                                        </Typography>
+                                    </CardContent>
+                                    <CardActions>
+                                        <Button size="small" color="primary" onClick={handleModalClick}>
+                                            View
+                                        </Button>
+                                        {card.mimeType !== folderMimeType &&
+                                        (<Tooltip title={getReadableFileSizeString(parseInt(card.size))} placement="top">
+                                            <Button size="small" color="primary" href={`${api}file/${card.id}`} download={card.name} target="_blank">
+                                            Download
+                                            </Button>
+                                        </Tooltip>)}
+                                        {card.mimeType !== folderMimeType && isMac &&
+                                        <Button size="small" color="primary" href={`iina://open?url=${encodeURI(api+'file/'+card.id)}`}>
+                                            <span role="img" aria-label="play in iina">▶️IINA</span>
+                                        </Button>}
+                                    </CardActions>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Container>
+            </main>
+            <Dialog open={view.open} onClose={handleModalClose} aria-labelledby="view screen" fullWidth maxWidth="lg">
+                {view.open &&
+                <Toolbar>
+                    <Typography noWrap={true} variant="h6" className={classes.title}>
+                        {view.name}
+                    </Typography>
+                    <div className={classes.grow} />
+                    <IconButton size="small" color="primary" onClick={() => fetchFavorite(view.id)} style={{marginRight: '4px'}} >
+                        {favorites.includes(view.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
+                    </IconButton>
+                    <IconButton size="small" color="primary" href={`${api}file/${view.id}`} download={view.name} target="_blank">
+                        <CloudDownload/>
+                    </IconButton>
+                </Toolbar>
+                }
+                {view.open && <video src={`${api}file/${view.id}`} controls={true} autoPlay />}
+            </Dialog>
+            <Dialog open={loginState.open} onClose={() => setLoginState({...loginState, open: false})} aria-labelledby="login window" fullWidth maxWidth="xs">
+                <DialogTitle>Login to GoogleDriveProxy</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        To use this app, please enter your credential here.
+                    </DialogContentText>
+                    <form autoComplete="off" action=".">
+                        <TextField autoFocus required fullWidth margin="normal"
+                             type="text" label="Username" disabled={loginState.submitting} onKeyPress={loginTrigger}
+                                   onChange={(evt) => setLoginState({...loginState, username: evt.target.value})}
+                        />
+                        <TextField autoFocus required fullWidth margin="normal"
+                             type="password" label="Password" disabled={loginState.submitting} onKeyPress={loginTrigger}
+                                   onChange={(evt) => setLoginState({...loginState, password: evt.target.value})}
+                        />
+                    </form>
+                </DialogContent>
+                <DialogActions>
+                    <Button disabled={!loginState.username || !loginState.password || loginState.submitting} onClick={login} color="primary">Submit</Button>
+                </DialogActions>
+            </Dialog>
+        </>
+    );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
