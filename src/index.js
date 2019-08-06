@@ -1,6 +1,5 @@
 import React, {useEffect} from 'react';
 import ReactDOM from 'react-dom';
-// import { render } from 'react-snapshot';
 import './index.css';
 import CssBaseline from "@material-ui/core/CssBaseline";
 import AppBar from "@material-ui/core/AppBar";
@@ -488,10 +487,10 @@ function App() {
                     </DialogContentText>
                     <form autoComplete="off" action=".">
                         <TextField autoFocus required fullWidth margin="normal"
-                             type="text" label="Username" disabled={loginState.submitting} onKeyPress={loginTrigger}
+                             type="text" label="Username" disabled={loginState.submitting} onKeyPress={loginTrigger} inputProps={{ autoCapitalize: 'off', autoCorrect: 'off' }}
                                    onChange={(evt) => setLoginState({...loginState, username: evt.target.value})}
                         />
-                        <TextField autoFocus required fullWidth margin="normal"
+                        <TextField required fullWidth margin="normal"
                              type="password" label="Password" disabled={loginState.submitting} onKeyPress={loginTrigger}
                                    onChange={(evt) => setLoginState({...loginState, password: evt.target.value})}
                         />
