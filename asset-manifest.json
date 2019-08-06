@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/GoogleDriveProxy/static/css/main.e3f4fb5b.chunk.css",
-    "main.js": "/GoogleDriveProxy/static/js/main.bf3d5c7d.chunk.js",
-    "main.js.map": "/GoogleDriveProxy/static/js/main.bf3d5c7d.chunk.js.map",
-    "runtime~main.js": "/GoogleDriveProxy/static/js/runtime~main.6bf27c57.js",
-    "runtime~main.js.map": "/GoogleDriveProxy/static/js/runtime~main.6bf27c57.js.map",
-    "static/js/2.173a05f2.chunk.js": "/GoogleDriveProxy/static/js/2.173a05f2.chunk.js",
-    "static/js/2.173a05f2.chunk.js.map": "/GoogleDriveProxy/static/js/2.173a05f2.chunk.js.map",
-    "index.html": "/GoogleDriveProxy/index.html",
-    "precache-manifest.973067adeb224bf627f04651dc07bff2.js": "/GoogleDriveProxy/precache-manifest.973067adeb224bf627f04651dc07bff2.js",
-    "service-worker.js": "/GoogleDriveProxy/service-worker.js",
-    "static/css/main.e3f4fb5b.chunk.css.map": "/GoogleDriveProxy/static/css/main.e3f4fb5b.chunk.css.map"
+    "main.css": "/static/css/main.e3f4fb5b.chunk.css",
+    "main.js": "/static/js/main.bf3d5c7d.chunk.js",
+    "main.js.map": "/static/js/main.bf3d5c7d.chunk.js.map",
+    "runtime~main.js": "/static/js/runtime~main.a8a9905a.js",
+    "runtime~main.js.map": "/static/js/runtime~main.a8a9905a.js.map",
+    "static/js/2.173a05f2.chunk.js": "/static/js/2.173a05f2.chunk.js",
+    "static/js/2.173a05f2.chunk.js.map": "/static/js/2.173a05f2.chunk.js.map",
+    "index.html": "/index.html",
+    "precache-manifest.9839ef4fae2eb4a8b2216e3be4f22113.js": "/precache-manifest.9839ef4fae2eb4a8b2216e3be4f22113.js",
+    "service-worker.js": "/service-worker.js",
+    "static/css/main.e3f4fb5b.chunk.css.map": "/static/css/main.e3f4fb5b.chunk.css.map"
   }
 }
