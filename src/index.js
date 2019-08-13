@@ -495,7 +495,7 @@ function App() {
                     </DialogContentText>
                     <form autoComplete="off" action=".">
                         <TextField autoFocus required fullWidth margin="normal"
-                             type="text" label="Username" disabled={loginState.submitting} onKeyPress={loginTrigger}
+                             type="text" label="Username" disabled={loginState.submitting} onKeyPress={loginTrigger} inputProps={{ autoCapitalize: 'off', autoCorrect: 'off' }}
                                    onChange={(evt) => setLoginState({...loginState, username: evt.target.value})}
                         />
                         <TextField required fullWidth margin="normal"
