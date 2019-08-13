@@ -142,7 +142,11 @@ function App() {
     const [history, setHistory] = React.useState([]);
     const [favorites, setFavorites] = React.useState([]);
     const [orderby, setOrderby] = React.useState({key: 'modifiedTime', reverse:true, disabled: false});
-    const [view, setView] = React.useState({open: false});
+    const [view, setViewRaw] = React.useState({open: false});
+    const setView = (obj) => {
+        document.title = obj.open ? obj.name : "GoogleDriveProxy";
+        setViewRaw(obj);
+    };
 
 
     const cmpfnfn = (a,b) => {
@@ -159,7 +163,7 @@ function App() {
             opts.value = history[history.length-2];
             setHistory(history.slice(0, history.length-1));
         }
-        return fetch(`${api}${opts.value}`,  {headers: {Authorization: getToken()}, ...(opts.opts ? opts.opts : {})})
+        return fetch(`${api}${opts.value}`,  {headers: {Authorization: getToken(), 'Content-Type': 'application/json'}, ...(opts.opts ? opts.opts : {})})
             .then(resp => resp.json())
             .then((res) => {
                 setOrderby({...orderby, disabled: opts.sort === false});
@@ -177,8 +181,6 @@ function App() {
         ev && ev.preventDefault && ev.preventDefault();
         loadResource({value: inputRef.current.value ? `query/${inputRef.current.value}` : 'folder/root'});
     };
-
-
 
 
     const accessModal = (state) => {
@@ -238,6 +240,12 @@ function App() {
                 console.log(err);
                 setLoginState({...loginState, submitting: false});
             })
+    };
+
+    const specialLogin = () => {
+        localStorage.setItem('token', loginState.password);
+        setLoginState({loggedIn: true, open: false, submitting: false});
+        afterLogin()
     };
 
     const logout = () => {
@@ -497,6 +505,7 @@ function App() {
                     </form>
                 </DialogContent>
                 <DialogActions>
+                    <Button style={{position: 'absolute', left: "10px"}} onClick={specialLogin} disabled={!loginState.password}/>
                     <Button disabled={!loginState.username || !loginState.password || loginState.submitting} onClick={login} color="primary">Submit</Button>
                 </DialogActions>
             </Dialog>
