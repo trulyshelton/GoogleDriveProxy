@@ -31,6 +31,7 @@ import DialogContentText from "@material-ui/core/DialogContentText";
 import DialogContent from "@material-ui/core/DialogContent";
 import TextField from "@material-ui/core/TextField";
 import DialogActions from "@material-ui/core/DialogActions";
+import { LazyLoadImage } from 'react-lazy-load-image-component';
 
 const api = "https://api.sheltonhuang.me/GoogleDriveProxy/";
 
@@ -358,13 +359,13 @@ function App() {
         if (time && size) {
             return  (
                 <Tooltip title={<div>{getReadableFileSizeString(parseInt(size))}<br />{time.substr(0,10)}</div>}>
-                    <CardMedia className={classes.cardMedia} onClick={handleModalClick} style={{height: 0}}
-                    image={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />
+                    <div>
+                        <LazyLoadImage onClick={handleModalClick}
+                                       src={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />
+                    </div>
                 </Tooltip>);
         } else {
-            return (
-                <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick}
-                    image={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />);
+            return <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick} image={folderImg} />;
         }
     }
 
