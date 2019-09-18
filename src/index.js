@@ -175,7 +175,10 @@ function App() {
             })
             .then((res) => opts.postProcess ? opts.postProcess(res) : null)
             .catch(alert)
-            .finally(() => setSearchDisabled(false));
+            .finally(() => {
+                window.scrollTo(0, 0);
+                setSearchDisabled(false);
+            });
     };
 
     const searchTrigger = (ev) => {
