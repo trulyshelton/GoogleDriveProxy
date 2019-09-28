@@ -24,11 +24,7 @@ video {
   height: auto   !important;
 }
 
+
 img {
-  width: auto;
-  height: auto;
-  max-width: 280px;
-  max-height: 158px;
-  display: block;
-  margin: auto;
+  object-fit: cover;
 }

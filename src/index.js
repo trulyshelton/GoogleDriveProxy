@@ -362,10 +362,8 @@ function App() {
         if (time && size) {
             return  (
                 <Tooltip title={<div>{getReadableFileSizeString(parseInt(size))}<br />{time.substr(0,10)}</div>}>
-                    <div>
                         <LazyLoadImage onClick={handleModalClick}
                                        src={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />
-                    </div>
                 </Tooltip>);
         } else {
             return <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick} image={folderImg} />;
