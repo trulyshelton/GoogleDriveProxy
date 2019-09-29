@@ -140,13 +140,45 @@ function App() {
     const [searchDisabled, setSearchDisabled] = React.useState(!getToken());
     const [items, setItems] = React.useState([]);
     const [folders, setFolders] = React.useState([]);
-    const [history, setHistory] = React.useState([]);
+    const [history, setHistory] = React.useState(['folder/root']);
     const [favorites, setFavorites] = React.useState([]);
     const [orderby, setOrderby] = React.useState({key: 'modifiedTime', reverse:true, disabled: false});
     const [view, setViewRaw] = React.useState({open: false});
     const setView = (obj) => {
         document.title = obj.open ? obj.name : "GoogleDriveProxy";
         setViewRaw(obj);
+    };
+
+    let previous_state =  new URLSearchParams();
+    const hashEventResponder = (e) => {
+        const params = new URLSearchParams(window.location.hash.substr(1));
+        const queryParam = params.get('q'), fileParam = params.get('f');
+        const newParams = new URLSearchParams();
+        newParams.set('q', queryParam ? queryParam : 'folder/root');
+        if (fileParam) newParams.set('f', fileParam);
+
+        if (previous_state.get('q') != newParams.get('q')) {
+            if (e && e.type != 'rewind') {
+                history.push(newParams.get('q'));
+            }
+            loadResource({value: newParams.get('q')});
+        }
+
+        if (fileParam) {
+            accessModal({open: true, id: fileParam});
+        } else {
+            setView({open: false});
+        }
+        window.history.replaceState({}, '', '#' + newParams.toString());
+        previous_state = newParams;
+    };
+
+    const rewind = () => {
+        let params = new URLSearchParams(window.location.hash.substr(1));
+        history.pop();
+        params.set('q', history.pop());
+        window.history.replaceState({}, '', '#' + params.toString());
+        window.dispatchEvent(new Event("rewind"));
     };
 
 
@@ -160,17 +192,12 @@ function App() {
 
     const loadResource = (opts) => {
         setSearchDisabled(true);
-        if (opts.rewind) {
-            opts.value = history[history.length-2];
-            setHistory(history.slice(0, history.length-1));
-        }
         return fetch(`${api}${opts.value}`,  {headers: {Authorization: getToken(), 'Content-Type': 'application/json'}, ...(opts.opts ? opts.opts : {})})
             .then(resp => resp.json())
             .then((res) => {
                 setOrderby({...orderby, disabled: opts.sort === false});
                 setItems(cacheItems = res.files.filter(el => el.mimeType !== folderMimeType));
                 setFolders(res.files.filter(el => el.mimeType === folderMimeType));
-                !opts.rewind && !opts.opts && (!history.length || history[history.length-1] !== opts.value) && setHistory([...history, opts.value]);
                 return res;
             })
             .then((res) => opts.postProcess ? opts.postProcess(res) : null)
@@ -183,7 +210,10 @@ function App() {
 
     const searchTrigger = (ev) => {
         ev && ev.preventDefault && ev.preventDefault();
-        loadResource({value: inputRef.current.value ? `query/${inputRef.current.value}` : 'folder/root'});
+        let params = new URLSearchParams(window.location.hash.substr(1));
+        params.set('q', inputRef.current.value ? `query/${inputRef.current.value}` : 'folder/root');
+        window.history.replaceState({}, '', '#' + params.toString());
+        window.dispatchEvent(new Event("myhashchange"));
     };
 
 
@@ -261,7 +291,7 @@ function App() {
     };
 
     const afterLogin = () => {
-        loadResource({value: 'folder/root'});
+        hashEventResponder();
         fetch(`${api}favorite`, {headers: {Authorization: getToken()}})
             .then(resp => resp.json())
             .then((res) => setFavorites(res.files))
@@ -269,10 +299,9 @@ function App() {
     };
 
     useEffect(() => {
-        const eventResponder = () =>  accessModal({open: true, id: window.location.hash.substr(1)});
-        window.addEventListener("hashchange", eventResponder, false);
-        window.addEventListener("myhashchange", eventResponder, false);
-        if (window.location.hash.substr(1)) accessModal({open: true, id: window.location.hash.substr(1)});
+        window.addEventListener("hashchange", hashEventResponder, false);
+        window.addEventListener("myhashchange", hashEventResponder, false);
+        window.addEventListener("rewind", hashEventResponder, false);
        if (getToken()) afterLogin();
     // eslint-disable-next-line
     }, []);
@@ -280,7 +309,7 @@ function App() {
 
     //modal
 
-    const fetchFavorite = (id) => {
+    const updateFavorite = (id) => {
         let isAdd = !favorites.includes(id);
         fetch(`${api}favorite/${id}`, {headers: {Authorization: getToken()}, method: isAdd ? 'PUT' : 'DELETE'})
             .then(async resp => {
@@ -331,20 +360,26 @@ function App() {
         } while (el.parentNode && !(id && name && mimetype));
 
         if (e.target.tagName === 'svg' || e.target.tagName === 'path') {  // is favorite click
-            fetchFavorite(id);
+            updateFavorite(id);
         } else {
+            let params = new URLSearchParams(window.location.hash.substr(1));
             if (mimetype === folderMimeType) {
-                loadResource({value: `folder/${id}`});
+                params.set('q', `folder/${id}`);
+                window.history.replaceState({}, '', '#' + params.toString());
+                window.dispatchEvent(new Event("myhashchange"));
             } else {
-                window.history.replaceState({}, '', '#' + id);
+                params.set('f', id);
+                window.history.replaceState({}, '', '#' + params.toString());
                 window.dispatchEvent(new Event("myhashchange"));
             }
         }
     };
 
     const handleModalClose = () => {
-        setView({open: false});
-        window.history.replaceState({}, '', window.location.pathname);
+        let params = new URLSearchParams(window.location.hash.substr(1));
+        params.delete('f');
+        window.history.replaceState({}, '', '#' + params.toString());
+        window.dispatchEvent(new Event("myhashchange"));
     };
 
 
@@ -360,11 +395,8 @@ function App() {
         let time = card.modifiedTime;
         let size = card.size;
         if (time && size) {
-            return  (
-                <Tooltip title={<div>{getReadableFileSizeString(parseInt(size))}<br />{time.substr(0,10)}</div>}>
-                        <LazyLoadImage onClick={handleModalClick}
-                                       src={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />
-                </Tooltip>);
+            return (<LazyLoadImage onClick={handleModalClick} once offset={600} style={{cursor: 'pointer'}}
+                   src={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />)
         } else {
             return <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick} image={folderImg} />;
         }
@@ -386,7 +418,10 @@ function App() {
                             open={Boolean(anchorEl)}
                             onClose={handleMenuClose}
                         >
-                            <MenuItem onClick={() => loadResource({value: "folder/root"})} >Home</MenuItem>
+                            <MenuItem onClick={() => {
+                                window.history.replaceState({}, '', '#');
+                                window.dispatchEvent(new Event("myhashchange"));
+                            }} >Home</MenuItem>
                             <MenuItem onClick={() => loadResource({
                                 value: "favorite?alt=content",
                                 postProcess: (r) => setFavorites(r.files.map(x => x.id)) })} >Favorites</MenuItem>
@@ -431,7 +466,7 @@ function App() {
                             </form>
                         </div>
                         <div className={classes.grow} />
-                        <IconButton color="inherit" disabled={history.length <= 1} onClick={() => loadResource({rewind: true})}><ArrowBack/></IconButton>
+                        <IconButton color="inherit" disabled={history.length <= 1} onClick={rewind}><ArrowBack/></IconButton>
                     </Toolbar>
                     {searchDisabled && loginState.loggedIn && <LinearProgress variant="query" />}
                 </AppBar>
@@ -447,9 +482,9 @@ function App() {
                                         {favorites.includes(card.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
                                     </IconButton>}
                                     <CardContent className={classes.cardContent}>
-                                        <Typography variant="subtitle1" component="h2">
-                                            {card.name}
-                                        </Typography>
+                                        <Tooltip title={card.modifiedTime.substr(0,10)} placement="top">
+                                            <Typography variant="subtitle2">{card.name}</Typography>
+                                        </Tooltip>
                                     </CardContent>
                                     <CardActions>
                                         <Button size="small" color="primary" onClick={handleModalClick}>
@@ -479,7 +514,7 @@ function App() {
                         {view.name}
                     </Typography>
                     <div className={classes.grow} />
-                    <IconButton size="small" color="primary" onClick={() => fetchFavorite(view.id)} style={{marginRight: '4px'}} >
+                    <IconButton size="small" color="primary" onClick={() => updateFavorite(view.id)} style={{marginRight: '4px'}} >
                         {favorites.includes(view.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
                     </IconButton>
                     <IconButton size="small" color="primary" href={`${api}file/${view.id}`} download={view.name} target="_blank">
