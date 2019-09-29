@@ -123,6 +123,17 @@ const viewed = (id) => {
     localStorage.setItem("recentViews", JSON.stringify(recentViews));
 };
 
+const getRecents = () => JSON.parse(localStorage.getItem("recentViews") || "[]");
+const addHistory = (item) => localStorage.setItem("history", JSON.stringify([...getHistory(), item]));
+const popHistory = () => {
+    let history = getHistory();
+    if (history.length < 1) return null;
+    let res = history.pop();
+    localStorage.setItem("history", JSON.stringify(history));
+    return res;
+};
+const getHistory = () => JSON.parse(localStorage.getItem("history") || "[\"folder/root\"]");
+
 function getReadableFileSizeString(fileSizeInBytes) {
     let i = -1, byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
     do { fileSizeInBytes = fileSizeInBytes / 1024; i++; } while (fileSizeInBytes > 1024);
@@ -135,12 +146,13 @@ let cacheItems = [];
 function App() {
     const classes = useStyles();
     const inputRef = React.createRef();
+    const iniHistory = getHistory();
 
     const [loginState, setLoginState]  = React.useState({loggedIn: !!getToken(), open: false, submitting: false});
     const [searchDisabled, setSearchDisabled] = React.useState(!getToken());
     const [items, setItems] = React.useState([]);
     const [folders, setFolders] = React.useState([]);
-    const [history, setHistory] = React.useState(['folder/root']);
+    const [history, setHistory] = React.useState(iniHistory);
     const [favorites, setFavorites] = React.useState([]);
     const [orderby, setOrderby] = React.useState({key: 'modifiedTime', reverse:true, disabled: false});
     const [view, setViewRaw] = React.useState({open: false});
@@ -150,6 +162,8 @@ function App() {
     };
 
     let previous_state =  new URLSearchParams();
+    if (iniHistory.length > 1) previous_state.set('q', iniHistory[iniHistory.length-1]);
+
     const hashEventResponder = (e) => {
         const params = new URLSearchParams(window.location.hash.substr(1));
         const queryParam = params.get('q'), fileParam = params.get('f');
@@ -159,7 +173,8 @@ function App() {
 
         if (previous_state.get('q') != newParams.get('q')) {
             if (e && e.type != 'rewind') {
-                history.push(newParams.get('q'));
+                history.push(previous_state.get('q'));
+                addHistory(previous_state.get('q'));
             }
             loadResource({value: newParams.get('q')});
         }
@@ -175,8 +190,8 @@ function App() {
 
     const rewind = () => {
         let params = new URLSearchParams(window.location.hash.substr(1));
-        history.pop();
         params.set('q', history.pop());
+        popHistory();
         window.history.replaceState({}, '', '#' + params.toString());
         window.dispatchEvent(new Event("rewind"));
     };
@@ -287,6 +302,7 @@ function App() {
         setLoginState({loggedIn: false, open: false, submitting: false});
         setItems([]); setFolders([]); setFavorites([]); setHistory([]); setSearchDisabled(true);
         localStorage.removeItem('token');
+        localStorage.removeItem('history');
         handleMenuClose();
     };
 
@@ -332,7 +348,7 @@ function App() {
     };
 
     const fetchRecent = () => {
-        let recentViews = JSON.parse(localStorage.getItem("recentViews") || "[]");
+        let recentViews = getRecents();
         if (recentViews.length) {
             loadResource({
                 sort: false,
@@ -466,7 +482,7 @@ function App() {
                             </form>
                         </div>
                         <div className={classes.grow} />
-                        <IconButton color="inherit" disabled={history.length <= 1} onClick={rewind}><ArrowBack/></IconButton>
+                        <IconButton color="inherit" disabled={history.length < 1} onClick={rewind}><ArrowBack/></IconButton>
                     </Toolbar>
                     {searchDisabled && loginState.loggedIn && <LinearProgress variant="query" />}
                 </AppBar>
