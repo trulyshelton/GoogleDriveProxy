@@ -112,7 +112,8 @@ const useStyles = makeStyles(theme => ({
     }
 }));
 
-
+const getOrderBy = () => JSON.parse(localStorage.getItem("orderBy") || '{"key":"createdTime","order":" desc"}');
+const putOrderBy = (orderBy) => localStorage.setItem("orderBy", JSON.stringify(orderBy));
 
 const viewed = (id) => {
     let recentViews = JSON.parse(localStorage.getItem("recentViews") || "[]");
@@ -154,7 +155,7 @@ function App() {
     const [folders, setFolders] = React.useState([]);
     const [history, setHistory] = React.useState(iniHistory);
     const [favorites, setFavorites] = React.useState([]);
-    const [orderby, setOrderby] = React.useState({key: 'modifiedTime', reverse:true, disabled: false});
+    const [orderby, setOrderby] = React.useState(getOrderBy());
     const [view, setViewRaw] = React.useState({open: false});
     const setView = (obj) => {
         document.title = obj.open ? obj.name : "GoogleDriveProxy";
@@ -171,12 +172,17 @@ function App() {
         newParams.set('q', queryParam ? queryParam : 'folder/root');
         if (fileParam) newParams.set('f', fileParam);
 
-        if (previous_state.get('q') != newParams.get('q')) {
-            if (e && e.type != 'rewind') {
+        let oB = getOrderBy();
+        let orderByQuery = new URLSearchParams({"orderBy":oB.key + oB.order}).toString();
+        if (previous_state.get('q') !== newParams.get('q')) {
+            if (e && e.type !== 'rewind') {
                 history.push(previous_state.get('q'));
                 addHistory(previous_state.get('q'));
             }
-            loadResource({value: newParams.get('q')});
+
+            loadResource({value: newParams.get('q') + "?" + orderByQuery});
+        } else if (e && e.force) {
+            loadResource({value: newParams.get('q') + "?" + orderByQuery});
         }
 
         if (fileParam) {
@@ -196,21 +202,12 @@ function App() {
         window.dispatchEvent(new Event("rewind"));
     };
 
-
-    const cmpfnfn = (a,b) => {
-        if (orderby.disabled) return 0;
-        if (orderby.reverse)  { let c = a; a = b; b = c; }
-        let k = orderby.key;
-        if (k === 'name' || k === 'modifiedTime') { return a[k].localeCompare(b[k]) }
-        else { return (a[k] && b[k]) ? parseInt(a[k]) - parseInt(b[k]) : a['modifiedTime'].localeCompare(b['modifiedTime']) }
-    };
-
     const loadResource = (opts) => {
         setSearchDisabled(true);
+
         return fetch(`${api}${opts.value}`,  {headers: {Authorization: getToken(), 'Content-Type': 'application/json'}, ...(opts.opts ? opts.opts : {})})
             .then(resp => resp.json())
             .then((res) => {
-                setOrderby({...orderby, disabled: opts.sort === false});
                 setItems(cacheItems = res.files.filter(el => el.mimeType !== folderMimeType));
                 setFolders(res.files.filter(el => el.mimeType === folderMimeType));
                 return res;
@@ -351,7 +348,6 @@ function App() {
         let recentViews = getRecents();
         if (recentViews.length) {
             loadResource({
-                sort: false,
                 value: "file",
                 opts: {
                     body: JSON.stringify({files: recentViews}),
@@ -362,9 +358,14 @@ function App() {
 
     const changeReverse = (e) => {
         if (e.target.innerText && e.target.innerText.includes('Order By')) {
-            setOrderby({...orderby, reverse: !orderby.reverse})
+            setOrderby({...orderby, order: orderby.order.length ? "" : " desc"});
         }
     };
+
+    useEffect(() => {
+        putOrderBy(orderby);
+        hashEventResponder({force: true})
+    }, [orderby]);
 
     const handleModalClick = (e) => {
         let el = e.target, id, name, mimetype;
@@ -408,9 +409,8 @@ function App() {
 
 
     function tooltipCardMedia(card) {
-        let time = card.modifiedTime;
         let size = card.size;
-        if (time && size) {
+        if (size) {
             return (<LazyLoadImage onClick={handleModalClick} once offset={600} style={{cursor: 'pointer'}}
                    src={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />)
         } else {
@@ -444,15 +444,15 @@ function App() {
                             <MenuItem onClick={changeReverse}>
                                 <form className={classes.form} autoComplete="off">
                                     <FormControl className={classes.formControl}>
-                                        <InputLabel htmlFor="orderby">Order By{orderby.reverse ? ' ⬇️':' ⬆️'}</InputLabel>
+                                        <InputLabel htmlFor="orderby">Order By{orderby.order.length ? ' ⬇️':' ⬆️'}</InputLabel>
                                         <Select
                                             value={orderby.key}
                                             onChange={(event) => setOrderby({...orderby, key: event.target.value})}
                                             inputProps={{ name: 'Order By', id: 'orderby', }}
                                         >
-                                            <MenuItem value={'modifiedTime'}>Last Modified</MenuItem>
+                                            <MenuItem value={'createdTime'}>Create Time</MenuItem>
                                             <MenuItem value={'name'}>Name</MenuItem>
-                                            <MenuItem value={'size'}>Size</MenuItem>
+                                            <MenuItem value={'quotaBytesUsed'}>Size</MenuItem>
                                         </Select>
                                     </FormControl>
                                 </form>
@@ -489,7 +489,7 @@ function App() {
             <main>
                 <Container className={classes.cardGrid} maxWidth="lg" >
                     <Grid container spacing={4}>
-                        {folders.sort(cmpfnfn).concat(items.sort(cmpfnfn)).map(card => (
+                        {folders.concat(items).map(card => (
                             <Grid item key={card['id']} xs={12} sm={6} md={3}  >
                                 <Card className={classes.card} data-id={card.id} data-name={card.name} data-mimetype={card.mimeType} style={{position: 'relative'}}>
                                     {tooltipCardMedia(card)}
@@ -498,9 +498,7 @@ function App() {
                                         {favorites.includes(card.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
                                     </IconButton>}
                                     <CardContent className={classes.cardContent}>
-                                        <Tooltip title={card.modifiedTime.substr(0,10)} placement="top">
-                                            <Typography variant="subtitle2">{card.name}</Typography>
-                                        </Tooltip>
+                                        <Typography variant="subtitle2">{card.name}</Typography>
                                     </CardContent>
                                     <CardActions>
                                         <Button size="small" color="primary" onClick={handleModalClick}>
