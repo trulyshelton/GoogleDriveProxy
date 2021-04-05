@@ -31,7 +31,7 @@ import DialogContentText from "@material-ui/core/DialogContentText";
 import DialogContent from "@material-ui/core/DialogContent";
 import TextField from "@material-ui/core/TextField";
 import DialogActions from "@material-ui/core/DialogActions";
-import { LazyLoadImage } from 'react-lazy-load-image-component';
+import VisibilitySensor from 'react-visibility-sensor';
 
 const api = "https://api.sheltonhuang.me/GoogleDriveProxy/";
 
@@ -98,6 +98,7 @@ const useStyles = makeStyles(theme => ({
     },
     cardMedia: {
         paddingTop: '56.25%', // 16:9
+        cursor: 'pointer'
     },
     cardContent: {
         flexGrow: 1,
@@ -109,6 +110,9 @@ const useStyles = makeStyles(theme => ({
     formControl: {
         margin: theme.spacing(1),
         minWidth: 120,
+    },
+    center: {
+        textAlign: 'center',
     }
 }));
 
@@ -151,6 +155,7 @@ function App() {
 
     const [loginState, setLoginState]  = React.useState({loggedIn: !!getToken(), open: false, submitting: false});
     const [searchDisabled, setSearchDisabled] = React.useState(!getToken());
+    const [nextPage, setNextPage] = React.useState({nextPageToken: null, opts: null});
     const [items, setItems] = React.useState([]);
     const [folders, setFolders] = React.useState([]);
     const [history, setHistory] = React.useState(iniHistory);
@@ -204,12 +209,17 @@ function App() {
 
     const loadResource = (opts) => {
         setSearchDisabled(true);
-
         return fetch(`${api}${opts.value}`,  {headers: {Authorization: getToken(), 'Content-Type': 'application/json'}, ...(opts.opts ? opts.opts : {})})
             .then(resp => resp.json())
             .then((res) => {
-                setItems(cacheItems = res.files.filter(el => el.mimeType !== folderMimeType));
+                cacheItems = res.files.filter(el => el.mimeType !== folderMimeType);
+                setItems(cacheItems);
                 setFolders(res.files.filter(el => el.mimeType === folderMimeType));
+                if (res.nextPageToken) {
+                    setNextPage({nextPageToken: res.nextPageToken, opts: opts})
+                } else {
+                    setNextPage({nextPageToken: null, opts: null})
+                }
                 return res;
             })
             .then((res) => opts.postProcess ? opts.postProcess(res) : null)
@@ -410,16 +420,6 @@ function App() {
     const handleMenuClose = () => setAnchorEl(null);
 
 
-    function tooltipCardMedia(card) {
-        let size = card.size;
-        if (size) {
-            return (<LazyLoadImage onClick={handleModalClick} once offset={600} style={{cursor: 'pointer'}}
-                   src={card.mimeType === folderMimeType ? folderImg : (card.thumbnailLink || failOverImg)} />)
-        } else {
-            return <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick} image={folderImg} />;
-        }
-    }
-
 
     return (
         <>
@@ -491,28 +491,37 @@ function App() {
             <main>
                 <Container className={classes.cardGrid} maxWidth="lg" >
                     <Grid container spacing={4}>
-                        {folders.concat(items).map(card => (
+                        {folders.map(card => (
                             <Grid item key={card['id']} xs={12} sm={6} md={3}  >
                                 <Card className={classes.card} data-id={card.id} data-name={card.name} data-mimetype={card.mimeType} style={{position: 'relative'}}>
-                                    {tooltipCardMedia(card)}
-                                    {card.mimeType !== folderMimeType &&
-                                    <IconButton size="small" color="primary" onClick={handleModalClick} style={{ position: 'absolute', top: '17px', right: '20px' }}>
-                                        {favorites.includes(card.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
-                                    </IconButton>}
+                                    <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick} image={folderImg} />
                                     <CardContent className={classes.cardContent}>
                                         <Typography variant="subtitle2">{card.name}</Typography>
                                     </CardContent>
                                     <CardActions>
-                                        <Button size="small" color="primary" onClick={handleModalClick}>
-                                            View
-                                        </Button>
-                                        {card.mimeType !== folderMimeType &&
-                                        (<Tooltip title={getReadableFileSizeString(parseInt(card.size))} placement="top">
+                                        <Button size="small" color="primary" onClick={handleModalClick}>View</Button>
+                                    </CardActions>
+                                </Card>
+                            </Grid>
+                        ))}
+                        {items.map(card => (
+                            <Grid item key={card['id']} xs={12} sm={6} md={3}  >
+                                <Card className={classes.card} data-id={card.id} data-name={card.name} data-mimetype={card.mimeType} style={{position: 'relative'}}>
+                                    <CardMedia className={classes.cardMedia} title={card.name} onClick={handleModalClick} image={card.thumbnailLink || failOverImg} />
+                                    <IconButton size="small" color="primary" onClick={handleModalClick} style={{ position: 'absolute', top: '17px', right: '20px' }}>
+                                        {favorites.includes(card.id) ? <Favorite style={{fill: '#ea062c'}}/> : <FavoriteBorder style={{fill: '#ea062c'}}/>}
+                                    </IconButton>
+                                    <CardContent className={classes.cardContent}>
+                                        <Typography variant="subtitle2">{card.name}</Typography>
+                                    </CardContent>
+                                    <CardActions>
+                                        <Button size="small" color="primary" onClick={handleModalClick}>View</Button>
+                                        <Tooltip title={getReadableFileSizeString(parseInt(card.size))} placement="top">
                                             <Button size="small" color="primary" href={`${api}file/${card.id}`} download={card.name} target="_blank">
                                             Download
                                             </Button>
-                                        </Tooltip>)}
-                                        {card.mimeType !== folderMimeType && isMac &&
+                                        </Tooltip>
+                                        {isMac &&
                                         <Button size="small" color="primary" href={`iina://open?url=${encodeURI(api+'file/'+card.id)}`}>
                                             <span role="img" aria-label="play in iina">▶️IINA</span>
                                         </Button>}
@@ -521,6 +530,31 @@ function App() {
                             </Grid>
                         ))}
                     </Grid>
+                    {nextPage.nextPageToken && (
+                        <VisibilitySensor intervalCheck={false} intervalDelay={750} scrollCheck={true} scrollDelay={250} partialVisibility={true} onChange={(isVisible => {
+                            if (!isVisible) return;
+                            setSearchDisabled(true);
+                            console.log(nextPage);
+                            fetch(`${api}${nextPage.opts.value}&${new URLSearchParams({"nextPageToken":nextPage.nextPageToken}).toString()}`,  {headers: {Authorization: getToken(), 'Content-Type': 'application/json'}, ...(nextPage.opts.opts ? nextPage.opts.opts : {})})
+                                .then(resp => resp.json())
+                                .then((res) => {
+                                    setItems(cacheItems = items.concat(res.files.filter(el => el.mimeType !== folderMimeType)));
+                                    setFolders(folders.concat(res.files.filter(el => el.mimeType === folderMimeType)));
+                                    if (res.nextPageToken) {
+                                        setNextPage({...nextPage, nextPageToken: res.nextPageToken})
+                                    } else {
+                                        setNextPage({nextPageToken: null, opts: null})
+                                    }
+                                    return res;
+                                })
+                                .catch(alert)
+                                .finally(() => {
+                                    setSearchDisabled(false);
+                                });
+                        })}>
+                            <Typography className={classes.center}>...loading more...</Typography>
+                        </VisibilitySensor>
+                    )}
                 </Container>
             </main>
             <Dialog open={view.open} onClose={handleModalClose} aria-labelledby="view screen" fullWidth maxWidth="lg">
