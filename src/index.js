@@ -364,7 +364,9 @@ function App() {
 
     useEffect(() => {
         putOrderBy(orderby);
-        hashEventResponder({force: true})
+        let orderchangeEvent = new Event("myhashchange");
+        orderchangeEvent.force = true;
+        window.dispatchEvent(orderchangeEvent);
     }, [orderby]);
 
     const handleModalClick = (e) => {
