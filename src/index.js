@@ -374,6 +374,7 @@ function App() {
 
     useEffect(() => {
         putOrderBy(orderby);
+        if (!getToken()) return;
         let orderchangeEvent = new Event("myhashchange");
         orderchangeEvent.force = true;
         window.dispatchEvent(orderchangeEvent);
