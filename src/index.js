@@ -33,7 +33,7 @@ import TextField from "@material-ui/core/TextField";
 import DialogActions from "@material-ui/core/DialogActions";
 import VisibilitySensor from 'react-visibility-sensor';
 
-const api = "https://api.sheltonhuang.me/GoogleDriveProxy/";
+const api = "https://api.hongtao.me/GoogleDriveProxy/";
 
 const isMac = navigator.platform.toUpperCase().indexOf('MAC')>=0;
 const folderMimeType = 'application/vnd.google-apps.folder';
